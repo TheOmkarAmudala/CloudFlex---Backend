@@ -1,9 +1,12 @@
-import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -13,7 +16,13 @@ export class UsersService {
       private readonly userRepo: Repository<User>,
   ) {}
 
-  async create(email: string, password: string, clientId: string) {
+  // 🔑 CREATE USER (FIXED)
+  async create(
+      email: string,
+      password: string,
+      clientId: string,
+      globalRole: 'admin' | 'member', // ✅ REQUIRED
+  ) {
     const existing = await this.userRepo.findOne({ where: { email } });
     if (existing) {
       throw new ConflictException('User already exists');
@@ -25,13 +34,13 @@ export class UsersService {
       email,
       password: hashed,
       clientId,
-      globalRole: 'member',
-
+      globalRole, // ✅ now valid
     });
 
     return this.userRepo.save(user);
   }
 
+  // 🔐 LOGIN VALIDATION
   async validate(email: string, password: string) {
     const user = await this.userRepo.findOne({ where: { email } });
     if (!user) throw new UnauthorizedException();
@@ -42,8 +51,8 @@ export class UsersService {
     return user;
   }
 
-
-findAll() {
+  // 👥 USERS LIST
+  findAll() {
     return this.userRepo.find();
   }
 
@@ -51,23 +60,24 @@ findAll() {
     return this.userRepo.findOne({ where: { id } });
   }
 
+  // 🔢 USED FOR ADMIN BOOTSTRAP
+  async countUsers() {
+    return this.userRepo.count();
+  }
 
-
-  async update(id: number, updateUserDto: any) {
+  async update(id: string, updateUserDto: any) {
     return this.userRepo.update(id, updateUserDto);
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     return this.userRepo.delete(id);
   }
 
+  // 👤 PROFILE + PROJECTS
   async getProfile(userId: string) {
     const user = await this.userRepo.findOne({
       where: { id: userId },
-      relations: [
-        'projectUsers',
-        'projectUsers.project',
-      ],
+      relations: ['projectUsers', 'projectUsers.project'],
     });
 
     if (!user) {
@@ -86,6 +96,4 @@ findAll() {
       })),
     };
   }
-
-
 }

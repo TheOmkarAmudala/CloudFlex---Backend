@@ -6,18 +6,23 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Project } from './project.entity';
+export type ProjectRole = 'owner' | 'developer' | 'viewer';
 
 @Entity()
 export class ProjectUser {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @ManyToOne(() => User, (user) => user.projectUsers, { nullable: false })
-    user: User;
-
-    @ManyToOne(() => Project, (project) => project.projectUsers, { nullable: false })
+    @ManyToOne(() => Project, (project) => project.projectUsers, {
+        onDelete: 'CASCADE',
+    })
     project: Project;
 
-    @Column()
-    role: 'owner' | 'developer' | 'viewer';
+    @ManyToOne(() => User, (user) => user.projectUsers, {
+        onDelete: 'CASCADE',
+    })
+    user: User;
+
+    @Column({ type: 'varchar' })
+    role: ProjectRole;
 }

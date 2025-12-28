@@ -34,11 +34,17 @@ export class ProjectsController {
     }
 
     @Post(':id/users')
-    assignUser(@Param('id') id: string, @Body() body) {
-        return this.projectsService.assignUser(
-            id,
+    assignUser(
+        @Param('id') projectId: string,
+        @Body() body,
+        @Req() req,
+    ) {
+        return this.projectsService.assignUserToProject(
+            projectId,
             body.userId,
             body.role,
+            req.user.sub,
+            req.user.role,
         );
     }
 
@@ -69,6 +75,46 @@ export class ProjectsController {
             req.user.role,
         );
     }
+
+
+    @UseGuards(JwtAuthGuard)
+    @Get(':id/users')
+    getProjectUsers(
+        @Param('id') projectId: string,
+    ) {
+        return this.projectsService.getProjectUsers(projectId);
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Put(':id/users/:userId')
+    updateProjectUserRole(
+        @Param('id') projectId: string,
+        @Param('userId') userId: string,
+        @Body() body: { role: 'owner' | 'developer' | 'viewer' },
+        @Req() req,
+    ) {
+        return this.projectsService.updateUserRole(
+            projectId,
+            userId,
+            body.role,
+            req.user,
+        );
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Delete(':id/users/:userId')
+    removeProjectUser(
+        @Param('id') projectId: string,
+        @Param('userId') userId: string,
+        @Req() req,
+    ) {
+        return this.projectsService.removeUserFromProject(
+            projectId,
+            userId,
+            req.user,
+        );
+    }
+
 
 
 }
