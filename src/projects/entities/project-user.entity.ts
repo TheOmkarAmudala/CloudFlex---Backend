@@ -1,30 +1,16 @@
 import {
     Entity,
     PrimaryGeneratedColumn,
-    Column,
     ManyToOne,
-    CreateDateColumn,
-    UpdateDateColumn,
+    Column,
 } from 'typeorm';
-import { User } from './user.entity';
+import { User } from '../../users/entities/user.entity';
 import { Project } from './project.entity';
-
-export enum ProjectRole {
-    OWNER = 'owner',
-    DEVELOPER = 'developer',
-    VIEWER = 'viewer',
-}
 
 @Entity()
 export class ProjectUser {
     @PrimaryGeneratedColumn('uuid')
     id: string;
-
-    @Column({
-        type: 'enum',
-        enum: ProjectRole,
-    })
-    role: ProjectRole;
 
     @ManyToOne(() => User, (user) => user.projectUsers, { nullable: false })
     user: User;
@@ -32,9 +18,6 @@ export class ProjectUser {
     @ManyToOne(() => Project, (project) => project.projectUsers, { nullable: false })
     project: Project;
 
-    @CreateDateColumn()
-    createdAt: Date;
-
-    @UpdateDateColumn()
-    updatedAt: Date;
+    @Column()
+    role: 'owner' | 'developer' | 'viewer';
 }
