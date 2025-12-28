@@ -3,11 +3,14 @@ import {
   NotFoundException,
   ConflictException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
 import * as bcrypt from 'bcrypt';
+
+import { User } from './entities/user.entity';
+import { Client } from '../Client/entities/client.entity';
 
 @Injectable()
 export class UsersService {
@@ -16,12 +19,14 @@ export class UsersService {
       private readonly userRepo: Repository<User>,
   ) {}
 
-  // 🔑 CREATE USER (FIXED)
+  // ----------------------------
+  // CREATE USER
+  // ----------------------------
   async create(
       email: string,
       password: string,
-      clientId: string,
-      globalRole: 'admin' | 'member', // ✅ REQUIRED
+      client: Client,
+      globalRole: 'admin' | 'member',
   ) {
     const existing = await this.userRepo.findOne({ where: { email } });
     if (existing) {
@@ -33,16 +38,22 @@ export class UsersService {
     const user = this.userRepo.create({
       email,
       password: hashed,
-      clientId,
-      globalRole, // ✅ now valid
+      client,
+      globalRole,
     });
 
     return this.userRepo.save(user);
   }
 
-  // 🔐 LOGIN VALIDATION
+  // ----------------------------
+  // LOGIN VALIDATION
+  // ----------------------------
   async validate(email: string, password: string) {
-    const user = await this.userRepo.findOne({ where: { email } });
+    const user = await this.userRepo.findOne({
+      where: { email },
+      relations: ['client'], // ✅ IMPORTANT
+    });
+
     if (!user) throw new UnauthorizedException();
 
     const match = await bcrypt.compare(password, user.password);
@@ -51,33 +62,52 @@ export class UsersService {
     return user;
   }
 
-  // 👥 USERS LIST
+  // ----------------------------
+  // USERS LIST
+  // ----------------------------
   findAll() {
-    return this.userRepo.find();
+    return this.userRepo.find({ relations: ['client'] });
   }
 
   async findOne(id: string) {
-    return this.userRepo.findOne({ where: { id } });
-  }
-
-  // 🔢 USED FOR ADMIN BOOTSTRAP
-  async countUsers() {
-    return this.userRepo.count();
+    return this.userRepo.findOne({
+      where: { id },
+      relations: ['client'],
+    });
   }
 
   async update(id: string, updateUserDto: any) {
-    return this.userRepo.update(id, updateUserDto);
+    if (!updateUserDto || Object.keys(updateUserDto).length === 0) {
+      throw new BadRequestException('No fields provided to update');
+    }
+
+    await this.userRepo.update(id, updateUserDto);
+    return this.findOne(id);
   }
 
   async remove(id: string) {
     return this.userRepo.delete(id);
   }
 
-  // 👤 PROFILE + PROJECTS
+  async countUsersByClient(clientId: string): Promise<number> {
+    return this.userRepo.count({
+      where: {
+        client: { id: clientId },
+      },
+    });
+  }
+
+
+
+
   async getProfile(userId: string) {
     const user = await this.userRepo.findOne({
       where: { id: userId },
-      relations: ['projectUsers', 'projectUsers.project'],
+      relations: [
+        'client',
+        'projectUsers',
+        'projectUsers.project',
+      ],
     });
 
     if (!user) {
@@ -88,7 +118,10 @@ export class UsersService {
       id: user.id,
       email: user.email,
       globalRole: user.globalRole,
-      clientId: user.clientId,
+      client: {
+        id: user.client.id,
+        name: user.client.name,
+      },
       projects: user.projectUsers.map((pu) => ({
         id: pu.project.id,
         name: pu.project.name,

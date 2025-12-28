@@ -4,10 +4,13 @@ import {
     Column,
     CreateDateColumn,
     UpdateDateColumn,
-    OneToMany
+    OneToMany,
+    ManyToOne
 } from 'typeorm';
 
+
 import { ProjectUser } from '../../projects/entities/project-user.entity';
+import { Client } from '../../Client/entities/client.entity';
 
 @Entity()
 export class User {
@@ -25,8 +28,11 @@ export class User {
     globalRole: string;
 
     // REQUIRED: link user to client/company
-    @Column()
-    clientId: string;
+    @ManyToOne(() => Client, (client) => client.users, {
+        nullable: false,
+    })
+    client: Client;
+
 
     // Project-level role (optional, can be null)
     @Column({ nullable: true })

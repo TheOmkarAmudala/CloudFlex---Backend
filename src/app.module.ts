@@ -8,6 +8,10 @@ import { Client } from './users/entities/client.entity';
 import { Project } from './projects/entities/project.entity';
 import { ProjectUser } from './projects/entities/project-user.entity';
 import { ProjectsModule } from './projects/projects.module';
+import { ClientsModule } from './Client/clients.module';
+
+
+
 
 @Module({
   imports: [
@@ -20,8 +24,10 @@ import { ProjectsModule } from './projects/projects.module';
       database: 'nest_app_db',
       autoLoadEntities: true,
       entities: [User, Client, Project, ProjectUser],
-      synchronize: true, // dev only
+      synchronize: true,
+       // dev only
     }),
+    ClientsModule,
     UsersModule,
     AuthModule,
     ProjectsModule,

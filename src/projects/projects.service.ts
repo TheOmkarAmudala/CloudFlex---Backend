@@ -1,11 +1,17 @@
-import { Injectable, ForbiddenException, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
-
+import {
+    Injectable,
+    ForbiddenException,
+    ConflictException,
+    NotFoundException,
+    BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+
 import { Project } from './entities/project.entity';
 import { ProjectUser } from './entities/project-user.entity';
 import { User } from '../users/entities/user.entity';
-
+import { Client } from '../Client/entities/client.entity';
 
 @Injectable()
 export class ProjectsService {
@@ -16,23 +22,31 @@ export class ProjectsService {
         @InjectRepository(ProjectUser)
         private readonly projectUserRepo: Repository<ProjectUser>,
 
-        @InjectRepository(User) // 👈 ADD THIS
+        @InjectRepository(User)
         private readonly userRepo: Repository<User>,
+
+        @InjectRepository(Client)
+        private readonly clientRepo: Repository<Client>,
     ) {}
 
-
+    // ----------------------------
+    // GET ALL PROJECTS
+    // ----------------------------
     async findAll(clientId: string) {
         return this.projectRepo.find({
-            where: { clientId },
+            where: { client: { id: clientId } },
             relations: ['projectUsers', 'projectUsers.user'],
         });
     }
 
+    // ----------------------------
+    // GET SINGLE PROJECT
+    // ----------------------------
     async findOne(projectId: string, clientId: string) {
         const project = await this.projectRepo.findOne({
             where: {
                 id: projectId,
-                clientId,
+                client: { id: clientId },
             },
             relations: ['projectUsers', 'projectUsers.user'],
         });
@@ -44,87 +58,50 @@ export class ProjectsService {
         return project;
     }
 
+    // ----------------------------
+    // CREATE PROJECT
+    // ----------------------------
     async create(name: string, clientId: string, userId: string) {
-        // 1️⃣ Check for existing project
-        const existingProject = await this.projectRepo.findOne({
-            where: { name, clientId },
+        const client = await this.clientRepo.findOne({
+            where: { id: clientId },
         });
 
-        if (existingProject) {
-            throw new ConflictException(
-                'Project already exists. Please try with another name.'
-            );
+        if (!client) {
+            throw new NotFoundException('Client not found');
         }
 
-        // 2️⃣ Create project
-        const project = await this.projectRepo.save({
-            name,
-            clientId,
+        const existing = await this.projectRepo.findOne({
+            where: { name, client: { id: clientId } },
         });
 
-        // 3️⃣ Creator becomes OWNER
+        if (existing) {
+            throw new ConflictException('Project already exists');
+        }
+
+        const project = this.projectRepo.create({
+            name,
+            client,
+        });
+
+        const savedProject = await this.projectRepo.save(project);
+
+        // creator becomes OWNER
         await this.projectUserRepo.save({
-            project,
-            user: { id: userId } as any,
+            project: savedProject,
+            user: { id: userId } as User,
             role: 'owner',
         });
 
-        return project;
+        return savedProject;
     }
 
-    async assignUser(
-        projectId: string,
-        userId: string,
-        role: 'owner' | 'developer' | 'viewer',
-    ) {
-        return this.projectUserRepo.save({
-            project: { id: projectId } as any,
-            user: { id: userId } as any,
-            role,
-        });
-    }
-
-    async deleteProject(
-        projectId: string,
-        userId: string,
-        globalRole: string,
-    ) {
-        const project = await this.projectRepo.findOne({
-            where: { id: projectId },
-            relations: ['projectUsers', 'projectUsers.user'],
-        });
-
-        if (!project) {
-            throw new NotFoundException('Project not found');
-        }
-
-        // Check if user is OWNER of this project
-        const projectUser = project.projectUsers.find(
-            (pu) => pu.user.id === userId,
-        );
-
-        const isOwner = projectUser?.role === 'owner';
-        const isAdmin = globalRole === 'admin';
-
-        if (!isOwner && !isAdmin) {
-            throw new ForbiddenException('Not allowed to delete this project');
-        }
-
-        // Delete project users first (FK safety)
-        await this.projectUserRepo.delete({
-            project: { id: projectId } as any,
-        });
-
-        // Delete project
-        await this.projectRepo.delete(projectId);
-
-        return { message: 'Project deleted successfully' };
-    }
-
+    // ----------------------------
+    // UPDATE PROJECT
+    // ----------------------------
     async updateProject(
         projectId: string,
         name: string,
-        userId: string,
+        requesterId: string,
         globalRole: string,
     ) {
         const project = await this.projectRepo.findOne({
@@ -132,98 +109,116 @@ export class ProjectsService {
             relations: ['projectUsers', 'projectUsers.user'],
         });
 
-        if (!project) {
-            throw new NotFoundException('Project not found');
-        }
+        if (!project) throw new NotFoundException('Project not found');
 
-        // Check RBAC
-        const projectUser = project.projectUsers.find(
-            (pu) => pu.user.id === userId,
+        const requester = project.projectUsers.find(
+            (pu) => pu.user.id === requesterId,
         );
 
-        const isOwner = projectUser?.role === 'owner';
+        const isOwner = requester?.role === 'owner';
         const isAdmin = globalRole === 'admin';
 
         if (!isOwner && !isAdmin) {
-            throw new ForbiddenException('Not allowed to update this project');
+            throw new ForbiddenException('Not allowed');
         }
 
         project.name = name;
         return this.projectRepo.save(project);
     }
 
-
-    async assignUserToProject(
+    // ----------------------------
+    // DELETE PROJECT
+    // ----------------------------
+    async deleteProject(
         projectId: string,
-        userId: string,
-        role: string,
         requesterId: string,
         globalRole: string,
     ) {
-        // 1. Fetch project with users
         const project = await this.projectRepo.findOne({
             where: { id: projectId },
             relations: ['projectUsers', 'projectUsers.user'],
         });
 
-        if (!project) {
-            throw new NotFoundException('Project not found');
-        }
+        if (!project) throw new NotFoundException('Project not found');
 
-        // 2. RBAC check
-        const projectUser = project.projectUsers.find(
+        const requester = project.projectUsers.find(
             (pu) => pu.user.id === requesterId,
         );
 
-        const isOwner = projectUser?.role === 'owner';
+        const isOwner = requester?.role === 'owner';
         const isAdmin = globalRole === 'admin';
 
         if (!isOwner && !isAdmin) {
-            throw new ForbiddenException(
-                'Only project owner or admin can assign users',
-            );
+            throw new ForbiddenException('Not allowed');
         }
 
-        // 3. Prevent duplicate assignment
+        await this.projectUserRepo.delete({
+            project: { id: projectId },
+        });
+
+        await this.projectRepo.delete(projectId);
+
+        return { message: 'Project deleted successfully' };
+    }
+
+    // ----------------------------
+    // ASSIGN USER TO PROJECT
+    // ----------------------------
+    async assignUserToProject(
+        projectId: string,
+        userId: string,
+        role: 'owner' | 'developer' | 'viewer',
+        requesterId: string,
+        globalRole: string,
+    ) {
+        const project = await this.projectRepo.findOne({
+            where: { id: projectId },
+            relations: ['projectUsers', 'projectUsers.user'],
+        });
+
+        if (!project) throw new NotFoundException('Project not found');
+
+        const requester = project.projectUsers.find(
+            (pu) => pu.user.id === requesterId,
+        );
+
+        const isOwner = requester?.role === 'owner';
+        const isAdmin = globalRole === 'admin';
+
+        if (!isOwner && !isAdmin) {
+            throw new ForbiddenException('Only owner or admin allowed');
+        }
+
         const alreadyAssigned = project.projectUsers.some(
             (pu) => pu.user.id === userId,
         );
 
         if (alreadyAssigned) {
-            throw new BadRequestException('User already assigned to project');
+            throw new BadRequestException('User already assigned');
         }
 
-        // 4. Validate user exists
-        const user = await this.userRepo.findOne({
-            where: { id: userId },
-        });
+        const user = await this.userRepo.findOne({ where: { id: userId } });
+        if (!user) throw new NotFoundException('User not found');
 
-        if (!user) {
-            throw new NotFoundException('User not found');
-        }
-
-        // 5. Create ProjectUser
-        const projectUserEntry = this.projectUserRepo.create({
+        const projectUser = this.projectUserRepo.create({
             project,
             user,
-                role: role as 'owner' | 'developer' | 'viewer',
+            role,
         });
 
-        return this.projectUserRepo.save(projectUserEntry);
+        return this.projectUserRepo.save(projectUser);
     }
 
+    // ----------------------------
+    // LIST PROJECT USERS
+    // ----------------------------
     async getProjectUsers(projectId: string) {
         const project = await this.projectRepo.findOne({
             where: { id: projectId },
-            relations: [
-                'projectUsers',
-                'projectUsers.user',
-            ],
+            relations: ['projectUsers', 'projectUsers.user'],
         });
 
-        if (!project) {
-            throw new NotFoundException('Project not found');
-        }
+        if (!project) throw new NotFoundException('Project not found');
 
         return project.projectUsers.map((pu) => ({
             id: pu.user.id,
@@ -232,7 +227,9 @@ export class ProjectsService {
         }));
     }
 
-
+    // ----------------------------
+    // UPDATE USER ROLE
+    // ----------------------------
     async updateUserRole(
         projectId: string,
         userId: string,
@@ -248,23 +245,20 @@ export class ProjectsService {
         });
 
         if (!projectUser) {
-            throw new NotFoundException('User not assigned to project');
+            throw new NotFoundException('User not assigned');
         }
 
-        // RBAC: only owner or admin
-        if (
-            currentUser.role !== 'admin' &&
-            projectUser.role !== 'owner'
-        ) {
-            throw new ForbiddenException('Not allowed');
+        if (currentUser.role !== 'admin') {
+            throw new ForbiddenException('Only admin can update roles');
         }
 
         projectUser.role = role;
         return this.projectUserRepo.save(projectUser);
     }
 
-
-
+    // ----------------------------
+    // REMOVE USER FROM PROJECT
+    // ----------------------------
     async removeUserFromProject(
         projectId: string,
         userId: string,
@@ -279,20 +273,14 @@ export class ProjectsService {
         });
 
         if (!projectUser) {
-            throw new NotFoundException('User not assigned to project');
+            throw new NotFoundException('User not assigned');
         }
 
-        // RBAC: only owner or admin
-        if (
-            currentUser.role !== 'admin' &&
-            projectUser.role !== 'owner'
-        ) {
-            throw new ForbiddenException('Not allowed');
+        if (currentUser.role !== 'admin') {
+            throw new ForbiddenException('Only admin can remove users');
         }
 
         await this.projectUserRepo.remove(projectUser);
-
         return { message: 'User removed from project' };
     }
-
 }

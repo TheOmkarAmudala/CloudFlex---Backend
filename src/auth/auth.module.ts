@@ -5,18 +5,18 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
+import { ClientsModule } from '../Client/clients.module';
 
 @Module({
     imports: [
-        PassportModule,
         JwtModule.register({
             secret: 'SECRET_KEY_123',
             signOptions: { expiresIn: '1d' },
         }),
         UsersModule,
+        ClientsModule, // ✅ THIS LINE FIXES THE ERROR
     ],
-    providers: [AuthService, JwtStrategy], // 👈 VERY IMPORTANT
+    providers: [AuthService, JwtStrategy],
     controllers: [AuthController],
-    exports: [JwtModule],
 })
 export class AuthModule {}
