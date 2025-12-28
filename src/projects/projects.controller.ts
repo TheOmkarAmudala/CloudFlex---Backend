@@ -6,6 +6,7 @@ import {
     UseGuards,
     Req,
     Param,
+    Put
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -53,6 +54,20 @@ export class ProjectsController {
     @Get(':id')
     getProjectById(@Param('id') id: string, @Req() req) {
         return this.projectsService.findOne(id, req.user.clientId);
+    }
+
+    @Put(':id')
+    updateProject(
+        @Param('id') id: string,
+        @Body() body,
+        @Req() req,
+    ) {
+        return this.projectsService.updateProject(
+            id,
+            body.name,
+            req.user.sub,
+            req.user.role,
+        );
     }
 
 

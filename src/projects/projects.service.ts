@@ -113,4 +113,35 @@ export class ProjectsService {
 
         return { message: 'Project deleted successfully' };
     }
+
+    async updateProject(
+        projectId: string,
+        name: string,
+        userId: string,
+        globalRole: string,
+    ) {
+        const project = await this.projectRepo.findOne({
+            where: { id: projectId },
+            relations: ['projectUsers', 'projectUsers.user'],
+        });
+
+        if (!project) {
+            throw new NotFoundException('Project not found');
+        }
+
+        // Check RBAC
+        const projectUser = project.projectUsers.find(
+            (pu) => pu.user.id === userId,
+        );
+
+        const isOwner = projectUser?.role === 'owner';
+        const isAdmin = globalRole === 'admin';
+
+        if (!isOwner && !isAdmin) {
+            throw new ForbiddenException('Not allowed to update this project');
+        }
+
+        project.name = name;
+        return this.projectRepo.save(project);
+    }
 }
