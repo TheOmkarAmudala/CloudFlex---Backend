@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Delete } from '@nestjs/common';
+
 
 
 @Controller('projects')
@@ -38,4 +40,20 @@ export class ProjectsController {
             body.role,
         );
     }
+
+    @Delete(':id')
+    deleteProject(@Param('id') id: string, @Req() req) {
+        return this.projectsService.deleteProject(
+            id,
+            req.user.sub,
+            req.user.role,
+        );
+    }
+
+    @Get(':id')
+    getProjectById(@Param('id') id: string, @Req() req) {
+        return this.projectsService.findOne(id, req.user.clientId);
+    }
+
+
 }

@@ -61,4 +61,31 @@ findAll() {
     return this.userRepo.delete(id);
   }
 
+  async getProfile(userId: string) {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: [
+        'projectUsers',
+        'projectUsers.project',
+      ],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      globalRole: user.globalRole,
+      clientId: user.clientId,
+      projects: user.projectUsers.map((pu) => ({
+        id: pu.project.id,
+        name: pu.project.name,
+        role: pu.role,
+      })),
+    };
+  }
+
+
 }

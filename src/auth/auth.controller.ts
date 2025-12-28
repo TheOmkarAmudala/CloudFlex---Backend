@@ -1,10 +1,14 @@
-import { Controller, Post, Body,  Get, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { UsersService } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
-    constructor(private readonly authService: AuthService) {}
-
+    constructor(
+        private readonly authService: AuthService,
+        private readonly usersService: UsersService,
+    ) {}
 
     @Post('register')
     async register(@Body() body) {
@@ -13,7 +17,6 @@ export class AuthController {
             body.password,
             body.clientId,
         );
-
     }
 
     @Post('login')
@@ -21,18 +24,10 @@ export class AuthController {
         return this.authService.login(body.email, body.password);
     }
 
-}
-
-@Controller('users')
-export class UsersController {
-
+    // ✅ THIS IS THE CORRECT /me ROUTE
+    @UseGuards(JwtAuthGuard)
     @Get('me')
-    getMe(@Req() req) {
-        // TEMP: return dummy user (replace later with JWT logic)
-        return {
-            id: 'demo-id',
-            email: 'test@test.com',
-            role: 'member',
-        };
+    getProfile(@Req() req) {
+        return this.usersService.getProfile(req.user.sub);
     }
 }
